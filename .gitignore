@@ -179,3 +179,16 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Environment — never commit API keys
+.env
+*.env
+
+# Node
+node_modules/
+dist/
+build/
+
+# Database
+*.db
+blobfi.db
