@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-const API = "http://localhost:8000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const DEFILLAMA_POOLS = "https://yields.llama.fi/pools";
 const DEFILLAMA_CHAINS = "https://api.llama.fi/v2/chains";
 
