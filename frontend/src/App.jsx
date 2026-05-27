@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const DEFILLAMA_POOLS = "https://yields.llama.fi/pools";
@@ -714,6 +715,7 @@ export default function BlobFi() {
           </div>
         )}
       </div>
+      <SpeedInsights />
     </div>
   );
 }
