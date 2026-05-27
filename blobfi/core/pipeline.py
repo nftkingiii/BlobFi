@@ -2,7 +2,8 @@
 core/pipeline.py
 
 BlobFi snapshot pipeline.
-Runs on a schedule: fetch Sui yields → AI report → store on Walrus → record blob ID.
+Auto-runs every 30 minutes. Manual triggers subject to IP rate limiting.
+All snapshots persisted to SQLite — shared across all visitors.
 """
 
 import asyncio
@@ -15,25 +16,25 @@ from walrus.client import walrus, snapshot_builder
 from sui.rpc import sui_rpc
 from core.logger import get_logger
 from core.config import settings
+from core.database import save_snapshot, load_snapshots, init_db
 
 logger = get_logger(__name__)
 
-# In-memory snapshot history (persists for session, shown in frontend)
-# In production you'd back this with SQLite
-_snapshot_history: List[Dict[str, Any]] = []
 _latest_protocols: List[Dict[str, Any]] = []
 _running = False
+# 30 minutes auto interval
+AUTO_INTERVAL_SECONDS = 1800
 
 
 async def run_snapshot() -> Dict[str, Any]:
     """
-    Execute one full BlobFi snapshot cycle:
+    Full BlobFi snapshot cycle:
     1. Fetch live Sui yields from DefiLlama
     2. Fetch Sui chain TVL
     3. Generate AI report via Claude
     4. Store snapshot blob on Walrus
-    5. Record blob ID in memory (+ log for on-chain anchoring)
-    6. Return full snapshot with blob_id
+    5. Persist to SQLite
+    6. Return summary
     """
     global _latest_protocols
 
@@ -74,7 +75,6 @@ async def run_snapshot() -> Dict[str, Any]:
         snapshot["blob_id"] = None
         snapshot["walrus_error"] = str(e)
 
-    # Step 6: Keep in memory history
     summary = {
         "snapshot_id": snapshot_id,
         "blob_id": snapshot.get("blob_id"),
@@ -87,9 +87,13 @@ async def run_snapshot() -> Dict[str, Any]:
         "ai_report": ai_report,
         "walrus_stored": blob_result is not None,
     }
-    _snapshot_history.insert(0, summary)
-    if len(_snapshot_history) > 50:
-        _snapshot_history.pop()
+
+    # Step 6: Persist to SQLite
+    try:
+        await save_snapshot(summary)
+        logger.info("Snapshot saved to SQLite")
+    except Exception as e:
+        logger.error("SQLite save failed: %s", e)
 
     duration = (datetime.now(timezone.utc) - started_at).total_seconds()
     logger.info("=== Snapshot complete in %.1fs | blob_id=%s ===", duration, snapshot.get("blob_id"))
@@ -98,18 +102,20 @@ async def run_snapshot() -> Dict[str, Any]:
 
 
 async def start_pipeline():
-    """Background task: run snapshots on interval."""
+    """Background task: initialize DB, run first snapshot, then auto every 30 mins."""
     global _running
     _running = True
-    logger.info("BlobFi pipeline started | interval=%ds", settings.snapshot_interval_seconds)
+
+    # Init DB on startup
+    await init_db()
+    logger.info("BlobFi auto-pipeline started | interval=30min")
 
     while _running:
         try:
             await run_snapshot()
         except Exception as e:
             logger.error("Pipeline cycle failed: %s", e)
-
-        await asyncio.sleep(settings.snapshot_interval_seconds)
+        await asyncio.sleep(AUTO_INTERVAL_SECONDS)
 
 
 def stop_pipeline():
@@ -118,8 +124,13 @@ def stop_pipeline():
     logger.info("BlobFi pipeline stopped")
 
 
-def get_snapshot_history() -> List[Dict[str, Any]]:
-    return _snapshot_history.copy()
+async def get_snapshot_history(limit: int = 50) -> List[Dict[str, Any]]:
+    """Load from SQLite — persists across restarts, shared across visitors."""
+    try:
+        return await load_snapshots(limit)
+    except Exception as e:
+        logger.error("Failed to load snapshots: %s", e)
+        return []
 
 
 def get_latest_protocols() -> List[Dict[str, Any]]:
