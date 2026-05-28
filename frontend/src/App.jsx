@@ -109,16 +109,24 @@ function RiskBadge({ risk }) {
 function APYColor(apy) { return apy > 20 ? "#F97316" : apy > 10 ? "#EAB308" : "#22C55E"; }
 
 function BlobTag({ id, full = false }) {
-  if (!id) return null;
-  const s = full ? id : `${id.slice(0, 6)}…${id.slice(-4)}`;
+  if (!id) return <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)" }}>—</span>;
+  const s = full ? id : `${id.slice(0, 12)}…`;
+  const [hov, setHov] = useState(false);
   return (
-    <span title={id} onClick={() => navigator.clipboard?.writeText(id)} style={{
-      fontFamily: "monospace", fontSize: full ? 11 : 10.5,
-      color: "rgba(255,255,255,0.3)", cursor: "pointer",
-      borderBottom: "1px dashed rgba(255,255,255,0.15)", wordBreak: "break-all",
-    }}
-      onMouseEnter={e => e.target.style.color = "rgba(255,255,255,0.7)"}
-      onMouseLeave={e => e.target.style.color = "rgba(255,255,255,0.3)"}
+    <span 
+      title={`Blob ID: ${id} (click to copy)`} 
+      onClick={() => navigator.clipboard?.writeText(id)}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        fontFamily: "monospace", fontSize: 10,
+        color: "#22C55E",
+        backgroundColor: hov ? "rgba(34, 197, 94, 0.12)" : "rgba(34, 197, 94, 0.08)",
+        border: hov ? "1px solid rgba(34, 197, 94, 0.4)" : "1px solid rgba(34, 197, 94, 0.2)",
+        padding: "3px 8px", borderRadius: 4, cursor: "pointer",
+        transition: "all 0.15s", whiteSpace: "nowrap",
+        display: "inline-block", wordBreak: "break-all",
+      }}
     >{s}</span>
   );
 }
@@ -649,7 +657,7 @@ export default function BlobFi() {
               </span>
             </div>
 
-            {/* Protocol grid — 5 columns */}
+            {/* Protocol grid — 5 columns with height limit */}
             <div style={{ flex: 1, overflowY: "auto", padding: "18px 22px" }}>
               {loading ? (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "rgba(255,255,255,0.2)", fontSize: 13, animation: "shimmer 1s infinite" }}>
@@ -660,7 +668,12 @@ export default function BlobFi() {
                   No protocols match "{search}"
                 </div>
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
+                <div style={{ 
+                  display: "grid", 
+                  gridTemplateColumns: "repeat(5, 1fr)", 
+                  gap: 12,
+                  autoRows: "max-content"
+                }}>
                   {visible.map((p, i) => (
                     <ProtocolCard key={`${p.protocol}-${p.symbol}`} p={p} i={i} onSelect={setSelProtocol} />
                   ))}
