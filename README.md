@@ -4,7 +4,6 @@
 
 BlobFi tracks every DeFi yield opportunity across the Sui ecosystem in real time, generates AI-written intelligence reports via Claude, and stores each snapshot as an immutable blob on Walrus decentralized storage — provable, retrievable, and permanent.
 
-Built for the **Tatum × Walrus Hackathon 2026**.
 
 ---
 
