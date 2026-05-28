@@ -151,7 +151,9 @@ async def snapshot_stream(request: Request):
 
     async def event_generator():
         if not rate["allowed"]:
-            yield f"data: {json.dumps({'step': 'error', 'message': f'Rate limit. Wait {rate[\"wait_minutes\"]}m.'})}\n\n"
+            wait = rate["wait_minutes"]
+            msg = json.dumps({"step": "error", "message": f"Rate limit. Wait {wait}m."})
+            yield f"data: {msg}\n\n"
             return
 
         await record_rate_limit(ip)
