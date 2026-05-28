@@ -33,6 +33,8 @@ const SNAPSHOT_STEPS = [
   { key: "done",      label: "Snapshot complete" },
 ];
 
+const PAGE_SIZE = 25;
+
 function useCountUp(target, ms = 1000) {
   const [v, setV] = useState(0);
   const r = useRef();
@@ -96,6 +98,18 @@ function Pill({ label, active, onClick }) {
   );
 }
 
+function NavBtn({ onClick, disabled, children }) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+      background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+      color: disabled ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.7)",
+      cursor: disabled ? "not-allowed" : "pointer", fontSize: 12, fontFamily: "inherit",
+      transition: "all 0.15s",
+    }}>{children}</button>
+  );
+}
+
 function RiskBadge({ risk }) {
   const map = { none: ["#22C55E", "No IL"], low: ["#86EFAC", "Low IL"], medium: ["#EAB308", "Med IL"], high: ["#F97316", "High IL"] };
   const [c, l] = map[risk] || ["#6B7280", "Unknown"];
@@ -113,8 +127,8 @@ function BlobTag({ id, full = false }) {
   const s = full ? id : `${id.slice(0, 12)}…`;
   const [hov, setHov] = useState(false);
   return (
-    <span 
-      title={`Blob ID: ${id} (click to copy)`} 
+    <span
+      title={`Blob ID: ${id} (click to copy)`}
       onClick={() => navigator.clipboard?.writeText(id)}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
@@ -133,7 +147,7 @@ function BlobTag({ id, full = false }) {
 
 function ProgressModal({ steps, currentStep, onClose }) {
   const stepKeys = SNAPSHOT_STEPS.map(s => s.key);
-  const currentIdx = stepKeys.indexOf(currentStep);
+  const currentIdx = currentStep === "complete" ? stepKeys.length : stepKeys.indexOf(currentStep);
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(6px)" }}>
       <div style={{ background: "#111", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, padding: "32px 36px", width: 360, opacity: 0, animation: "rise 0.25s ease both" }}>
@@ -142,7 +156,6 @@ function ProgressModal({ steps, currentStep, onClose }) {
           {SNAPSHOT_STEPS.map((s, i) => {
             const done = i < currentIdx;
             const active = i === currentIdx;
-            const pending = i > currentIdx;
             return (
               <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{
@@ -307,6 +320,7 @@ export default function BlobFi() {
   const [selSnap, setSelSnap] = useState(null);
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [blobSearch, setBlobSearch] = useState("");
   const [blobResult, setBlobResult] = useState(null);
   const [blobSearching, setBlobSearching] = useState(false);
@@ -320,6 +334,9 @@ export default function BlobFi() {
   const [loading, setLoading] = useState(true);
   const [dataSource, setDataSource] = useState("fallback");
   const [rateLimit, setRateLimit] = useState({ allowed: true, wait_minutes: 0 });
+
+  // Reset page when filter or search changes
+  useEffect(() => { setPage(1); }, [filter, search]);
 
   // Fetch live DefiLlama data
   useEffect(() => {
@@ -421,12 +438,15 @@ export default function BlobFi() {
       return p.protocol.toLowerCase().includes(s) || p.symbol.toLowerCase().includes(s) || p.category.toLowerCase().includes(s);
     });
 
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paged = visible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
   const doSnapshot = async () => {
     if (!rateLimit.allowed) return;
     setSnapping(true);
     setSnapStep("fetching");
 
-    // Try SSE stream first
     try {
       const evtSource = new EventSource(`${API}/snapshot/stream`);
       evtSource.onmessage = (e) => {
@@ -453,7 +473,6 @@ export default function BlobFi() {
       };
       evtSource.onerror = async () => {
         evtSource.close();
-        // Fallback to regular POST
         await fallbackSnapshot();
       };
       return;
@@ -484,7 +503,6 @@ export default function BlobFi() {
         setRateLimit({ allowed: false, wait_minutes: err.detail?.wait_minutes || 60 });
       }
     } catch {}
-    // Frontend-only fallback
     const currentTvl = safeTvl;
     const top3 = [...saneProtocols].sort((a, b) => b.apy - a.apy).slice(0, 3);
     const s = {
@@ -657,26 +675,46 @@ export default function BlobFi() {
               </span>
             </div>
 
-            {/* Protocol grid — 5 columns with height limit */}
-            <div style={{ flex: 1, overflowY: "auto", padding: "18px 22px" }}>
-              {loading ? (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "rgba(255,255,255,0.2)", fontSize: 13, animation: "shimmer 1s infinite" }}>
-                  Fetching live Sui protocols from DefiLlama…
-                </div>
-              ) : visible.length === 0 ? (
-                <div style={{ padding: "40px 0", textAlign: "center", color: "rgba(255,255,255,0.2)", fontSize: 13 }}>
-                  No protocols match "{search}"
-                </div>
-              ) : (
-                <div style={{ 
-                  display: "grid", 
-                  gridTemplateColumns: "repeat(5, 1fr)", 
-                  gap: 12,
-                  autoRows: "max-content"
+            {/* Protocol grid — 5 columns, paginated */}
+            <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+              <div style={{ flex: 1, overflowY: "auto", padding: "18px 22px" }}>
+                {loading ? (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "rgba(255,255,255,0.2)", fontSize: 13, animation: "shimmer 1s infinite" }}>
+                    Fetching live Sui protocols from DefiLlama…
+                  </div>
+                ) : visible.length === 0 ? (
+                  <div style={{ padding: "40px 0", textAlign: "center", color: "rgba(255,255,255,0.2)", fontSize: 13 }}>
+                    No protocols match "{search}"
+                  </div>
+                ) : (
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                    gap: 12,
+                    gridAutoRows: "max-content",
+                    alignItems: "start",
+                  }}>
+                    {paged.map((p, i) => (
+                      <ProtocolCard key={`${p.protocol}-${p.symbol}`} p={p} i={i} onSelect={setSelProtocol} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Pagination bar */}
+              {!loading && visible.length > PAGE_SIZE && (
+                <div style={{
+                  flexShrink: 0, padding: "12px 22px",
+                  borderTop: "1px solid rgba(255,255,255,0.07)",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
                 }}>
-                  {visible.map((p, i) => (
-                    <ProtocolCard key={`${p.protocol}-${p.symbol}`} p={p} i={i} onSelect={setSelProtocol} />
-                  ))}
+                  <NavBtn onClick={() => setPage(1)} disabled={safePage === 1}>«</NavBtn>
+                  <NavBtn onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage === 1}>‹</NavBtn>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#fff", minWidth: 70, textAlign: "center", letterSpacing: "-0.02em" }}>
+                    {safePage} / {totalPages}
+                  </span>
+                  <NavBtn onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}>›</NavBtn>
+                  <NavBtn onClick={() => setPage(totalPages)} disabled={safePage === totalPages}>»</NavBtn>
                 </div>
               )}
             </div>
@@ -728,7 +766,6 @@ export default function BlobFi() {
         {view === "history" && (
           <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", flex: 1, overflow: "hidden" }}>
             <div style={{ borderRight: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-              {/* Blob search */}
               <div style={{ padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.07)", flexShrink: 0 }}>
                 <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{snapshots.length} snapshots · Walrus</div>
                 <div style={{ display: "flex", gap: 6 }}>
@@ -767,7 +804,6 @@ export default function BlobFi() {
               </div>
             </div>
 
-            {/* Detail panel */}
             <div style={{ overflowY: "auto", padding: "32px" }}>
               {blobResult ? (
                 <div style={{ maxWidth: 560, opacity: 0, animation: "rise 0.3s ease both" }}>
