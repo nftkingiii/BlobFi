@@ -84,7 +84,10 @@ class WalrusClient:
                 blob_id = None
                 try:
                     data = resp.json()
-                    blob_id = data.get("blob_id")
+                    if "newlyCreated" in data:
+                        blob_id = data["newlyCreated"]["blobObject"]["blobId"]
+                    elif "alreadyCertified" in data:
+                        blob_id = data["alreadyCertified"]["blobId"]
                 except:
                     # If not JSON, try plain text
                     blob_id = response_text.strip() if response_text else None
@@ -115,7 +118,7 @@ class WalrusClient:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 # Correct endpoint: /blobs/{blob_id} (not /v1/blobs/{blob_id})
                 resp = await client.get(
-                    f"{self.aggregator_url}/blobs/{blob_id}",
+                    f"{self.aggregator_url}/v1/blobs/{blob_id}",
                 )
                 resp.raise_for_status()
                 
