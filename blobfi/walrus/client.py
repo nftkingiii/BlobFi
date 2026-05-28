@@ -66,18 +66,31 @@ class WalrusClient:
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 # POST blob to Walrus publisher
-                resp = await client.post(
+                # Correct endpoint: /blobs (not /v1/blobs)
+                # Use application/octet-stream for binary data
+                resp = await client.put(
                     f"{self.publisher_url}/v1/blobs",
                     content=payload,
                     params={"epochs": self.epochs},
-                    headers={"Content-Type": "application/json"},
+                    headers={"Content-Type": "application/octet-stream"},
                 )
                 resp.raise_for_status()
-                data = resp.json()
-
-                blob_id = data.get("blob_id")
+                
+                # Walrus returns the blob_id in the response body or headers
+                response_text = resp.text
+                
+                # Try to extract blob_id from response
+                # Response format: plain text blob_id or JSON
+                blob_id = None
+                try:
+                    data = resp.json()
+                    blob_id = data.get("blob_id")
+                except:
+                    # If not JSON, try plain text
+                    blob_id = response_text.strip() if response_text else None
+                
                 if not blob_id:
-                    raise ValueError("No blob_id returned from Walrus")
+                    raise ValueError(f"No blob_id returned from Walrus. Response: {response_text}")
 
                 logger.info(f"Snapshot stored on Walrus | blob_id={blob_id} | size={size} bytes")
 
@@ -100,13 +113,21 @@ class WalrusClient:
         """
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
+                # Correct endpoint: /blobs/{blob_id} (not /v1/blobs/{blob_id})
                 resp = await client.get(
-                    f"{self.aggregator_url}/v1/blobs/{blob_id}",
+                    f"{self.aggregator_url}/blobs/{blob_id}",
                 )
                 resp.raise_for_status()
-                data = resp.json()
-                logger.info(f"Retrieved snapshot from Walrus | blob_id={blob_id}")
-                return data
+                
+                # Walrus returns the blob as bytes or JSON
+                try:
+                    data = resp.json()
+                    logger.info(f"Retrieved snapshot from Walrus | blob_id={blob_id}")
+                    return data
+                except:
+                    # If response is not JSON, return as text
+                    logger.info(f"Retrieved snapshot from Walrus | blob_id={blob_id}")
+                    return {"blob_content": resp.text}
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
