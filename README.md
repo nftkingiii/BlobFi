@@ -231,6 +231,15 @@ BlobFi/
 
 ---
 
+## Deployment & Mainnet
+
+Currently deployed on **Walrus testnet** for seamless demonstration without token requirements. Production mainnet deployment would integrate Sui wallet connection (WalletKit) for WAL token payments.
+
+- **Frontend:** https://blobfi.vercel.app
+- **Backend API:** https://blobfi-api.onrender.com
+- **Walrus:** Testnet (publisher.walrus-testnet.walrus.space)
+- **Sui RPC:** Mainnet via Tatum
+
 ## Built With
 
 - [Tatum](https://tatum.io) — Sui RPC infrastructure
