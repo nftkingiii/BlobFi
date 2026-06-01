@@ -30,8 +30,11 @@ class SnapshotBuilder:
         Construct the complete snapshot payload.
         This will be serialized to JSON and uploaded to Walrus.
         """
-        top_protocol = max(protocols, key=lambda p: p["apy"]) if protocols else None
-        avg_apy = sum(p["apy"] for p in protocols) / len(protocols) if protocols else 0
+        sane = [p for p in protocols if p.get("apy", 0) <= 300]
+        top_protocol = max(sane, key=lambda p: p["apy"]) if sane else None
+        avg_apy = sum(p["apy"] for p in sane) / len(sane) if sane else 0
+        
+        
 
         return {
             "snapshot_id": snapshot_id,

@@ -845,7 +845,9 @@ export default function BlobFi() {
                   <Line />
                   <div style={{ padding: "22px 0" }}>
                     <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>AI Report</div>
-                    <p style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.75 }}>{selSnap.ai_report || selSnap.report}</p>
+                    <p style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.75 }}>
+                      {(selSnap.ai_report || selSnap.report || "").replace(/\*\*/g, "")}
+                    </p>
                   </div>
                   <Line />
                   <div style={{ padding: "18px 0" }}>
