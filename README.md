@@ -4,7 +4,6 @@
 
 BlobFi tracks every DeFi yield opportunity across the Sui ecosystem in real time, generates AI-written intelligence reports via Claude, and stores each snapshot as an immutable blob on Walrus decentralized storage — provable, retrievable, and permanent.
 
-Built for the **Tatum × Walrus Hackathon 2026**.
 
 ---
 
@@ -231,6 +230,15 @@ BlobFi/
 ```
 
 ---
+
+## Deployment & Mainnet
+
+Currently deployed on **Walrus testnet** for seamless demonstration without token requirements. Production mainnet deployment would integrate Sui wallet connection (WalletKit) for WAL token payments.
+
+- **Frontend:** https://blobfi.vercel.app
+- **Backend API:** https://blobfi-api.onrender.com
+- **Walrus:** Testnet (publisher.walrus-testnet.walrus.space)
+- **Sui RPC:** Mainnet via Tatum
 
 ## Built With
 
